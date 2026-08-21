@@ -1,0 +1,13 @@
+{
+  "documents": [],
+  "chunks": [],
+  "users": [
+    {
+      "id": "7af77592-92fa-4f63-bf97-0e5cbd98c6dd",
+      "name": "RAGULNATH R CSE DEPT",
+      "email": "23102168@rmd.ac.in",
+      "passwordHash": "$2b$10$hMO36V12oZKjoAOVHENnjOC9KCiNu3WoAKsRQvdbXMueOrwYMRzhS",
+      "role": "User"
+    }
+  ]
+}

@@ -5,15 +5,14 @@ import { Scale, FileText, ArrowRightLeft, Download } from 'lucide-react';
 import { mockDocuments } from '@/lib/db/mockData';
 
 export default function ComparePage() {
-  const [doc1, setDoc1] = useState(mockDocuments[0].id);
-  const [doc2, setDoc2] = useState(mockDocuments[2].id);
+  const [doc1, setDoc1] = useState<string>('');
+  const [doc2, setDoc2] = useState<string>('');
 
   const getDoc = (id: string) => mockDocuments.find(d => d.id === id);
-  const selectedDoc1 = getDoc(doc1);
-  const selectedDoc2 = getDoc(doc2);
+  const selectedDoc1 = doc1 ? getDoc(doc1) : null;
+  const selectedDoc2 = doc2 ? getDoc(doc2) : null;
 
-  // Mock comparison logic
-  const isRetentionConflict = doc1 === 'd1' && doc2 === 'd3' || doc1 === 'd3' && doc2 === 'd1';
+  const isRetentionConflict = false; // Real conflict detection disabled until docs are added
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto h-full flex flex-col">
@@ -37,6 +36,7 @@ export default function ComparePage() {
               onChange={(e) => setDoc1(e.target.value)}
               className="w-full bg-[#1E293B] border border-[#334155] text-white text-sm rounded-md px-3 py-2 outline-none focus:border-cyan-500"
             >
+              {mockDocuments.length === 0 && <option value="">No documents uploaded</option>}
               {mockDocuments.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
             </select>
           </div>
@@ -49,6 +49,7 @@ export default function ComparePage() {
               onChange={(e) => setDoc2(e.target.value)}
               className="w-full bg-[#1E293B] border border-[#334155] text-white text-sm rounded-md px-3 py-2 outline-none focus:border-cyan-500"
             >
+              {mockDocuments.length === 0 && <option value="">No documents uploaded</option>}
               {mockDocuments.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
             </select>
           </div>

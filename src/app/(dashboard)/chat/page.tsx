@@ -1,9 +1,23 @@
 "use client";
 
 import { useState } from 'react';
-import { askQuestion, RagResponse } from '@/lib/services/ragService';
 import { Bot, Send, User, BookOpen, AlertCircle, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+export type Citation = {
+  chunkId: string;
+  docId: string;
+  docTitle: string;
+  page: number;
+  text: string;
+};
+
+export type RagResponse = {
+  answer: string;
+  citations: Citation[];
+  confidenceScore: number;
+  isExternalContextUsed: boolean;
+};
 
 type Message = {
   id: string;
@@ -33,16 +47,28 @@ export default function ChatPage() {
     setIsLoading(true);
 
     try {
-      const response = await askQuestion(userMsg.content);
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: userMsg.content }),
+      });
+      const response = await res.json();
+      
       const assistantMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: response.answer,
+        content: response.answer || response.error || "An error occurred.",
         ragResponse: response
       };
       setMessages(prev => [...prev, assistantMsg]);
     } catch (error) {
       console.error(error);
+      const errorMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: 'Sorry, I encountered a network error while connecting to the intelligence server.'
+      };
+      setMessages(prev => [...prev, errorMsg]);
     } finally {
       setIsLoading(false);
     }
@@ -81,7 +107,7 @@ export default function ChatPage() {
                 <p className="leading-relaxed text-sm whitespace-pre-wrap">{msg.content}</p>
                 
                 {/* Evidence Indicators for Assistant */}
-                {msg.role === 'assistant' && msg.ragResponse && msg.ragResponse.citations.length > 0 && (
+                {msg.role === 'assistant' && msg.ragResponse && Array.isArray(msg.ragResponse.citations) && msg.ragResponse.citations.length > 0 && (
                   <div className="mt-4 pt-4 border-t border-[#334155]">
                     <div className="flex items-center gap-2 text-xs font-medium text-cyan-400 mb-2">
                       <BookOpen className="h-3 w-3" />
@@ -170,7 +196,7 @@ export default function ChatPage() {
           </h3>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.length > 0 && messages[messages.length - 1].role === 'assistant' && messages[messages.length - 1].ragResponse?.citations.map((cite, idx) => (
+          {messages.length > 0 && messages[messages.length - 1].role === 'assistant' && Array.isArray(messages[messages.length - 1].ragResponse?.citations) && messages[messages.length - 1].ragResponse!.citations.map((cite, idx) => (
              <div key={idx} className="bg-[#1E293B] border border-[#334155] rounded-lg p-3">
                <div className="flex justify-between items-start mb-2">
                  <span className="text-xs font-bold text-cyan-400">[{idx + 1}] Citation</span>
@@ -183,7 +209,7 @@ export default function ChatPage() {
                </div>
              </div>
           ))}
-          {(!messages[messages.length - 1]?.ragResponse?.citations || messages[messages.length - 1]?.ragResponse?.citations.length === 0) && (
+          {(!messages[messages.length - 1]?.ragResponse?.citations || !Array.isArray(messages[messages.length - 1]?.ragResponse?.citations) || messages[messages.length - 1]?.ragResponse!.citations.length === 0) && (
             <div className="h-full flex flex-col items-center justify-center text-center p-4">
               <BookOpen className="h-10 w-10 text-slate-700 mb-2" />
               <p className="text-sm text-slate-500">Ask a question to see extracted evidence.</p>
