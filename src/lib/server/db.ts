@@ -8,6 +8,10 @@ export type Chunk = {
   page: number; // For PDF-parse, we might only have generic page/chunk index
   content: string;
   embedding?: number[];
+  authorityRank: number;
+  category: string;
+  decayRate: number;
+  uploadDate: string;
 };
 
 export type Document = {
@@ -18,6 +22,9 @@ export type Document = {
   status: string;
   tags: string[];
   excerpt: string;
+  authorityRank: number;
+  category: string;
+  decayRate: number;
 };
 
 export type User = {

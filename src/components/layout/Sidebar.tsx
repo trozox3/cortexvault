@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { LayoutDashboard, FileText, MessageSquare, Scale, AlertTriangle, Network, Workflow, FileBarChart, Settings, LogOut } from 'lucide-react';
+import { LayoutDashboard, FileText, MessageSquare, Scale, AlertTriangle, Network, Workflow, FileBarChart, Settings, LogOut, Activity } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -11,8 +11,8 @@ const navigation = [
   { name: 'Compare Studio', href: '/compare', icon: Scale },
   { name: 'Conflict Radar', href: '/conflicts', icon: AlertTriangle },
   { name: 'Knowledge Graph', href: '/graph', icon: Network },
-  { name: 'Workflow Builder', href: '/workflows', icon: Workflow },
   { name: 'Reports', href: '/reports', icon: FileBarChart },
+  { name: 'Benchmarks / Eval', href: '/eval', icon: Activity },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 

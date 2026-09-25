@@ -149,8 +149,21 @@ export default function WorkspacePage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button className="text-slate-400 hover:text-white p-1 rounded hover:bg-[#334155] transition-colors opacity-0 group-hover:opacity-100">
-                        <MoreVertical className="h-4 w-4" />
+                      <button 
+                        onClick={async () => {
+                          if(confirm('Delete document?')) {
+                            try {
+                              await fetch(`/api/documents?id=${doc.id}`, { method: 'DELETE' });
+                              fetchDocuments();
+                            } catch (e) {
+                              console.error(e);
+                            }
+                          }
+                        }}
+                        className="text-red-400 hover:text-red-300 p-1 rounded hover:bg-[#334155] transition-colors opacity-0 group-hover:opacity-100"
+                        title="Delete Document"
+                      >
+                        Delete
                       </button>
                     </td>
                   </tr>

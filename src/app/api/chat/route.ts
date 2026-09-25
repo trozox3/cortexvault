@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { readDB, Chunk } from '@/lib/server/db';
-import { cosineSimilarity, generateAnswer, getEmbedding } from '@/lib/server/rag';
+import { cosineSimilarity, generateAnswer, getEmbedding, getAI } from '@/lib/server/rag';
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,36 +17,116 @@ export async function POST(req: NextRequest) {
     const db = readDB();
     const chunks = db.chunks.filter(c => c.embedding && c.embedding.length > 0);
 
-    // Calculate similarities
-    const scoredChunks = chunks.map(chunk => ({
-      ...chunk,
-      score: cosineSimilarity(queryEmbedding, chunk.embedding!)
-    }));
+    // Calculate similarities and composite scores
+    const scoredChunks = chunks.map(chunk => {
+      const cosine = cosineSimilarity(queryEmbedding, chunk.embedding!);
+      
+      // Calculate recency (decay based on category)
+      const uploadTime = chunk.uploadDate ? new Date(chunk.uploadDate).getTime() : Date.now();
+      const daysOld = Math.max(0, (Date.now() - uploadTime) / (1000 * 3600 * 24));
+      const decayRate = chunk.decayRate || 0.01;
+      const recency = Math.exp(-decayRate * daysOld);
 
-    // Sort by score descending and take top 5
-    scoredChunks.sort((a, b) => b.score - a.score);
+      // Calculate authority
+      const rank = chunk.authorityRank || 2;
+      const authScore = rank === 1 ? 1.0 : rank === 2 ? 0.7 : 0.4;
+
+      // Composite Score formula (50% similarity, 30% authority, 20% recency)
+      const compositeScore = (cosine * 0.5) + (authScore * 0.3) + (recency * 0.2);
+
+      return {
+        ...chunk,
+        cosine,
+        recency,
+        authScore,
+        compositeScore
+      };
+    });
+
+    // Sort by composite score descending and take top 5
+    scoredChunks.sort((a, b) => b.compositeScore - a.compositeScore);
     const topChunks = scoredChunks.slice(0, 5);
 
-    // If no chunks matched well, or db is empty
-    if (topChunks.length === 0 || topChunks[0].score < 0.2) {
+    if (topChunks.length === 0 || topChunks[0].cosine < 0.2) {
       return NextResponse.json({
         answer: "I couldn't find relevant information in the uploaded documents to answer your question.",
         citations: [],
         confidenceScore: 0,
-        isExternalContextUsed: false
+        isExternalContextUsed: false,
+        trace: { retrieved: 0 }
       });
     }
 
-    // Generate answer with context
-    const context = topChunks.map(c => ({
-      content: c.content,
-      docTitle: c.docTitle,
-      page: c.page
-    }));
+    let conflictDetected = false;
+    let conflictGap = 0;
+    let resolution = 'none';
+    let answerText = '';
+    let modifiedQuery = query;
 
-    const answerText = await generateAnswer(query, context);
+    // Detect Conflicts between top 2 chunks
+    if (topChunks.length >= 2) {
+      try {
+        const ai = getAI();
+        const conflictPrompt = `Analyze these two document excerpts. Do they contain fundamentally conflicting information regarding this query: "${query}"?
+Excerpt 1 (${topChunks[0].docTitle}): "${topChunks[0].content}"
+Excerpt 2 (${topChunks[1].docTitle}): "${topChunks[1].content}"
+Respond strictly with JSON: { "conflict": true/false, "description": "brief explanation" }`;
 
-    // Format citations
+        const conflictRes = await ai.models.generateContent({
+          model: 'gemini-3.6-flash',
+          contents: conflictPrompt,
+          config: { responseMimeType: "application/json" }
+        });
+        
+        const conflictData = JSON.parse(conflictRes.text || '{"conflict":false}');
+        
+        if (conflictData.conflict) {
+          conflictDetected = true;
+          conflictGap = topChunks[0].compositeScore - topChunks[1].compositeScore;
+          
+          if (conflictGap > 0.25) {
+            resolution = 'auto-resolved';
+            modifiedQuery = query + `\n\nSystem Note: Two documents conflict. Rely strictly on "${topChunks[0].docTitle}" as it has a higher authoritative ranking. Ignore contradictory info from "${topChunks[1].docTitle}".`;
+          } else {
+            resolution = 'clarify';
+            answerText = `I found conflicting information in the documents regarding your query.\n\n` +
+              `* **${topChunks[0].docTitle}** (Auth Rank: ${topChunks[0].authorityRank})\n` +
+              `* **${topChunks[1].docTitle}** (Auth Rank: ${topChunks[1].authorityRank})\n\n` +
+              `**Conflict Details:** ${conflictData.description}\n\n` +
+              `Because these documents have similar composite scores (gap: ${conflictGap.toFixed(3)}), I cannot auto-resolve this safely. Could you clarify which policy context you want me to follow?`;
+          }
+        }
+      } catch (e) {
+        console.error('Conflict Check Error', e);
+      }
+    }
+
+    // Generate answer if not asking for clarification
+    if (!answerText) {
+      const context = topChunks.map(c => ({
+        content: c.content,
+        docTitle: c.docTitle,
+        page: c.page
+      }));
+      answerText = await generateAnswer(modifiedQuery, context);
+    }
+
+    // Format trace and citations
+    const trace = {
+      chunksRetrieved: topChunks.length,
+      scoring: topChunks.map(c => ({
+        id: c.id,
+        docTitle: c.docTitle,
+        cosine: c.cosine,
+        composite: c.compositeScore,
+        auth: c.authScore,
+        recency: c.recency
+      })),
+      conflictDetected,
+      conflictGap,
+      resolution
+    };
+
     const citations = topChunks.map(c => ({
       chunkId: c.id,
       docId: c.docId,
@@ -58,8 +138,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       answer: answerText,
       citations,
-      confidenceScore: topChunks[0].score, // Use max similarity as confidence proxy
-      isExternalContextUsed: false
+      confidenceScore: topChunks[0].compositeScore,
+      isExternalContextUsed: false,
+      trace
     });
 
   } catch (error: any) {

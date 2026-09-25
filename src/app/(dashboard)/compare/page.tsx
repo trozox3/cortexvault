@@ -1,18 +1,70 @@
 "use client";
 
-import { useState } from 'react';
-import { Scale, FileText, ArrowRightLeft, Download } from 'lucide-react';
-import { mockDocuments } from '@/lib/db/mockData';
+import { useState, useEffect } from 'react';
+import { Scale, FileText, ArrowRightLeft, Download, Loader2 } from 'lucide-react';
+
+type Document = {
+  id: string;
+  title: string;
+  excerpt: string;
+};
+
+type Conflict = {
+  topic: string;
+  doc1Excerpt: string;
+  doc2Excerpt: string;
+  severity: string;
+};
+
+type ComparisonResult = {
+  summary: string;
+  conflicts: Conflict[];
+};
 
 export default function ComparePage() {
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [doc1, setDoc1] = useState<string>('');
   const [doc2, setDoc2] = useState<string>('');
+  const [isComparing, setIsComparing] = useState(false);
+  const [result, setResult] = useState<ComparisonResult | null>(null);
 
-  const getDoc = (id: string) => mockDocuments.find(d => d.id === id);
+  useEffect(() => {
+    fetch('/api/documents')
+      .then(res => res.json())
+      .then(data => {
+        if (data.documents) {
+          setDocuments(data.documents);
+          if (data.documents.length >= 1) setDoc1(data.documents[0].id);
+          if (data.documents.length >= 2) setDoc2(data.documents[1].id);
+        }
+      })
+      .catch(e => console.error(e));
+  }, []);
+
+  const getDoc = (id: string) => documents.find(d => d.id === id);
   const selectedDoc1 = doc1 ? getDoc(doc1) : null;
   const selectedDoc2 = doc2 ? getDoc(doc2) : null;
 
-  const isRetentionConflict = false; // Real conflict detection disabled until docs are added
+  const runComparison = async () => {
+    if (!doc1 || !doc2) return;
+    setIsComparing(true);
+    setResult(null);
+    try {
+      const res = await fetch('/api/compare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ doc1Id: doc1, doc2Id: doc2 })
+      });
+      const data = await res.json();
+      if (!data.error) {
+        setResult(data);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsComparing(false);
+    }
+  };
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto h-full flex flex-col">
@@ -21,9 +73,13 @@ export default function ComparePage() {
           <h1 className="text-2xl font-bold text-white tracking-tight">Compare Studio</h1>
           <p className="text-slate-400 text-sm mt-1">Side-by-side analysis of clauses, versions, and obligations.</p>
         </div>
-        <button className="bg-[#1E293B] hover:bg-[#334155] border border-[#334155] text-white px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors">
-          <Download className="h-4 w-4" />
-          Export Matrix
+        <button 
+          onClick={runComparison}
+          disabled={isComparing || !doc1 || !doc2 || doc1 === doc2}
+          className="bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors"
+        >
+          {isComparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Scale className="h-4 w-4" />}
+          {isComparing ? 'Analyzing...' : 'Run AI Comparison'}
         </button>
       </div>
 
@@ -36,8 +92,8 @@ export default function ComparePage() {
               onChange={(e) => setDoc1(e.target.value)}
               className="w-full bg-[#1E293B] border border-[#334155] text-white text-sm rounded-md px-3 py-2 outline-none focus:border-cyan-500"
             >
-              {mockDocuments.length === 0 && <option value="">No documents uploaded</option>}
-              {mockDocuments.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
+              {documents.length === 0 && <option value="">No documents uploaded</option>}
+              {documents.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
             </select>
           </div>
           <div className="shrink-0 bg-[#1E293B] p-2 rounded-full border border-[#334155]">
@@ -49,8 +105,8 @@ export default function ComparePage() {
               onChange={(e) => setDoc2(e.target.value)}
               className="w-full bg-[#1E293B] border border-[#334155] text-white text-sm rounded-md px-3 py-2 outline-none focus:border-cyan-500"
             >
-              {mockDocuments.length === 0 && <option value="">No documents uploaded</option>}
-              {mockDocuments.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
+              {documents.length === 0 && <option value="">No documents uploaded</option>}
+              {documents.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
             </select>
           </div>
         </div>
@@ -66,26 +122,18 @@ export default function ComparePage() {
             
             <div className="space-y-6">
               <div className="bg-[#0F172A] border border-[#334155] rounded-lg p-4">
-                <h3 className="text-xs uppercase text-slate-500 font-semibold mb-2">Summary</h3>
-                <p className="text-sm text-slate-300">{selectedDoc1?.excerpt}</p>
+                <h3 className="text-xs uppercase text-slate-500 font-semibold mb-2">Original Excerpt</h3>
+                <p className="text-sm text-slate-300">{selectedDoc1?.excerpt || 'Select a document.'}</p>
               </div>
 
-              {isRetentionConflict && selectedDoc1?.id === 'd1' && (
-                <div className="bg-[#1E293B] border-l-2 border-red-500 p-4 rounded-r-lg">
-                  <h3 className="text-xs uppercase text-slate-500 font-semibold mb-2">Data Retention Clause (Pg 12)</h3>
+              {result && result.conflicts.map((conflict, idx) => (
+                <div key={idx} className="bg-[#1E293B] border-l-2 border-amber-500 p-4 rounded-r-lg">
+                  <h3 className="text-xs uppercase text-slate-500 font-semibold mb-2">{conflict.topic}</h3>
                   <p className="text-sm text-slate-300">
-                    <span className="bg-red-900/30 text-red-200 px-1 rounded">User data must be retained for 7 years</span> for compliance with financial regulations.
+                    <span className="bg-amber-900/30 text-amber-200 px-1 rounded">{conflict.doc1Excerpt}</span>
                   </p>
                 </div>
-              )}
-              {isRetentionConflict && selectedDoc1?.id === 'd3' && (
-                <div className="bg-[#1E293B] border-l-2 border-yellow-500 p-4 rounded-r-lg">
-                  <h3 className="text-xs uppercase text-slate-500 font-semibold mb-2">Termination Clause (Pg 4)</h3>
-                  <p className="text-sm text-slate-300">
-                    Upon termination of services, <span className="bg-yellow-900/30 text-yellow-200 px-1 rounded">all personal data shall be deleted within 30 days.</span>
-                  </p>
-                </div>
-              )}
+              ))}
             </div>
           </div>
 
@@ -98,41 +146,33 @@ export default function ComparePage() {
 
             <div className="space-y-6">
               <div className="bg-[#0F172A] border border-[#334155] rounded-lg p-4">
-                <h3 className="text-xs uppercase text-slate-500 font-semibold mb-2">Summary</h3>
-                <p className="text-sm text-slate-300">{selectedDoc2?.excerpt}</p>
+                <h3 className="text-xs uppercase text-slate-500 font-semibold mb-2">Original Excerpt</h3>
+                <p className="text-sm text-slate-300">{selectedDoc2?.excerpt || 'Select a document.'}</p>
               </div>
 
-              {isRetentionConflict && selectedDoc2?.id === 'd3' && (
-                <div className="bg-[#1E293B] border-l-2 border-yellow-500 p-4 rounded-r-lg">
-                  <h3 className="text-xs uppercase text-slate-500 font-semibold mb-2">Termination Clause (Pg 4)</h3>
+              {result && result.conflicts.map((conflict, idx) => (
+                <div key={idx} className="bg-[#1E293B] border-l-2 border-red-500 p-4 rounded-r-lg">
+                  <h3 className="text-xs uppercase text-slate-500 font-semibold mb-2">{conflict.topic}</h3>
                   <p className="text-sm text-slate-300">
-                    Upon termination of services, <span className="bg-yellow-900/30 text-yellow-200 px-1 rounded">all personal data shall be deleted within 30 days.</span>
+                    <span className="bg-red-900/30 text-red-200 px-1 rounded">{conflict.doc2Excerpt}</span>
                   </p>
                 </div>
-              )}
-              {isRetentionConflict && selectedDoc2?.id === 'd1' && (
-                <div className="bg-[#1E293B] border-l-2 border-red-500 p-4 rounded-r-lg">
-                  <h3 className="text-xs uppercase text-slate-500 font-semibold mb-2">Data Retention Clause (Pg 12)</h3>
-                  <p className="text-sm text-slate-300">
-                    <span className="bg-red-900/30 text-red-200 px-1 rounded">User data must be retained for 7 years</span> for compliance with financial regulations.
-                  </p>
-                </div>
-              )}
+              ))}
             </div>
           </div>
         </div>
         
-        {isRetentionConflict && (
-          <div className="bg-red-900/20 border-t border-red-900/50 p-4 flex items-center justify-between">
+        {result && (
+          <div className="bg-cyan-900/20 border-t border-cyan-900/50 p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Scale className="h-5 w-5 text-red-400" />
+              <Scale className="h-5 w-5 text-cyan-400" />
               <div>
-                <p className="text-sm font-semibold text-red-200">Conflict Detected</p>
-                <p className="text-xs text-red-300/70">The retention period (7 years) in {getDoc('d1')?.title} conflicts with the deletion timeline (30 days) in {getDoc('d3')?.title}.</p>
+                <p className="text-sm font-semibold text-cyan-200">AI Comparison Summary</p>
+                <p className="text-xs text-cyan-300/70">{result.summary}</p>
               </div>
             </div>
-            <button className="bg-red-900/40 hover:bg-red-900/60 border border-red-500/30 text-red-200 px-3 py-1.5 rounded text-xs font-medium transition-colors">
-              Create Conflict Ticket
+            <button className="bg-cyan-900/40 hover:bg-cyan-900/60 border border-cyan-500/30 text-cyan-200 px-3 py-1.5 rounded text-xs font-medium transition-colors">
+              Export Matrix
             </button>
           </div>
         )}

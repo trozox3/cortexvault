@@ -187,15 +187,62 @@ export default function ChatPage() {
         </div>
       </div>
       
-      {/* Evidence Side Panel (Visible when latest assistant msg has citations) */}
-      <div className="w-80 bg-[#0B1120] flex flex-col hidden lg:flex">
+      {/* Evidence Side Panel */}
+      <div className="w-80 bg-[#0B1120] flex flex-col hidden xl:flex border-l border-[#334155] overflow-y-auto">
         <div className="h-14 border-b border-[#334155] flex items-center px-4 shrink-0">
           <h3 className="font-semibold text-sm flex items-center gap-2 text-slate-200">
             <BookOpen className="h-4 w-4 text-cyan-400" />
-            Evidence View
+            Explainability Trace
           </h3>
         </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 p-4 space-y-6">
+          {messages.length > 0 && messages[messages.length - 1].role === 'assistant' && messages[messages.length - 1].ragResponse?.trace && (
+            <div className="space-y-4">
+              <div className="bg-[#1E293B] border border-[#334155] rounded-lg p-3">
+                <h4 className="text-xs font-bold text-cyan-400 mb-2 border-b border-[#334155] pb-1 uppercase tracking-wider">Retrieval Pipeline</h4>
+                <div className="space-y-2">
+                  {messages[messages.length - 1].ragResponse!.trace.scoring.map((score: any, idx: number) => (
+                    <div key={idx} className="text-xs text-slate-300">
+                      <div className="font-semibold truncate text-slate-100" title={score.docTitle}>#{idx + 1} {score.docTitle}</div>
+                      <div className="grid grid-cols-2 gap-1 mt-1 pl-2 border-l-2 border-[#334155]">
+                        <span className="text-slate-500">Cosine:</span> <span>{score.cosine.toFixed(3)}</span>
+                        <span className="text-slate-500">Authority:</span> <span className={score.auth === 1.0 ? 'text-green-400' : ''}>{score.auth}</span>
+                        <span className="text-slate-500">Recency:</span> <span>{score.recency.toFixed(3)}</span>
+                        <span className="text-slate-500 font-semibold mt-1">Composite:</span> <span className="font-semibold text-cyan-400 mt-1">{score.composite.toFixed(3)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-[#1E293B] border border-[#334155] rounded-lg p-3">
+                <h4 className="text-xs font-bold text-cyan-400 mb-2 border-b border-[#334155] pb-1 uppercase tracking-wider">Conflict Resolution</h4>
+                <div className="text-xs space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Conflict Found:</span>
+                    <span className={messages[messages.length - 1].ragResponse!.trace.conflictDetected ? 'text-yellow-400 font-bold' : 'text-slate-300'}>
+                      {messages[messages.length - 1].ragResponse!.trace.conflictDetected ? 'YES' : 'NO'}
+                    </span>
+                  </div>
+                  {messages[messages.length - 1].ragResponse!.trace.conflictDetected && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Score Gap:</span>
+                        <span className="text-slate-300">{messages[messages.length - 1].ragResponse!.trace.conflictGap.toFixed(3)}</span>
+                      </div>
+                      <div className="flex flex-col mt-2">
+                        <span className="text-slate-500">Action Taken:</span>
+                        <span className={messages[messages.length - 1].ragResponse!.trace.resolution === 'auto-resolved' ? 'text-green-400 font-semibold' : 'text-yellow-400 font-semibold'}>
+                          {messages[messages.length - 1].ragResponse!.trace.resolution.toUpperCase()}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {messages.length > 0 && messages[messages.length - 1].role === 'assistant' && Array.isArray(messages[messages.length - 1].ragResponse?.citations) && messages[messages.length - 1].ragResponse!.citations.map((cite, idx) => (
              <div key={idx} className="bg-[#1E293B] border border-[#334155] rounded-lg p-3">
                <div className="flex justify-between items-start mb-2">
@@ -209,10 +256,11 @@ export default function ChatPage() {
                </div>
              </div>
           ))}
+
           {(!messages[messages.length - 1]?.ragResponse?.citations || !Array.isArray(messages[messages.length - 1]?.ragResponse?.citations) || messages[messages.length - 1]?.ragResponse!.citations.length === 0) && (
             <div className="h-full flex flex-col items-center justify-center text-center p-4">
               <BookOpen className="h-10 w-10 text-slate-700 mb-2" />
-              <p className="text-sm text-slate-500">Ask a question to see extracted evidence.</p>
+              <p className="text-sm text-slate-500">Ask a question to see explainability trace and extracted evidence.</p>
             </div>
           )}
         </div>

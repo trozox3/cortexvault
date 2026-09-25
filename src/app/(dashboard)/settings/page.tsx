@@ -1,11 +1,45 @@
 "use client";
 
-import { Save, Shield, HardDrive, User, Bell } from 'lucide-react';
-import { useState } from 'react';
+import { Save, HardDrive, User, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+
+type UserProfile = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+};
 
 export default function SettingsPage() { 
   const [activeTab, setActiveTab] = useState('profile');
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(res => res.json())
+      .then(data => {
+        if (data.user) {
+          setProfile(data.user);
+        }
+        setIsLoading(false);
+      })
+      .catch(e => {
+        console.error(e);
+        setIsLoading(false);
+      });
+  }, []);
   
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-full">
+        <Loader2 className="h-8 w-8 animate-spin text-cyan-500" />
+      </div>
+    );
+  }
+
+  const isAdmin = profile?.role === 'Administrator' || profile?.email === 'owner@test.cortexvault.local' || profile?.email.includes('admin');
+
   return (
     <div className="max-w-4xl mx-auto h-full space-y-6">
       <div>
@@ -22,12 +56,6 @@ export default function SettingsPage() {
           <button onClick={() => setActiveTab('storage')} className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'storage' ? 'bg-[#1E293B] text-cyan-400' : 'text-slate-300 hover:bg-[#1E293B]/50 hover:text-white'}`}>
             <HardDrive className="h-4 w-4" /> Data & Storage
           </button>
-          <button onClick={() => setActiveTab('security')} className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'security' ? 'bg-[#1E293B] text-cyan-400' : 'text-slate-300 hover:bg-[#1E293B]/50 hover:text-white'}`}>
-            <Shield className="h-4 w-4" /> Security
-          </button>
-          <button onClick={() => setActiveTab('notifications')} className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'notifications' ? 'bg-[#1E293B] text-cyan-400' : 'text-slate-300 hover:bg-[#1E293B]/50 hover:text-white'}`}>
-            <Bell className="h-4 w-4" /> Notifications
-          </button>
         </div>
 
         {/* Content Area */}
@@ -41,20 +69,25 @@ export default function SettingsPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1">Display Name</label>
-                  <input type="text" defaultValue="Active User" className="w-full bg-[#1E293B] border border-[#334155] rounded-md px-3 py-2 text-white focus:border-cyan-500 focus:outline-none" />
+                  <input type="text" defaultValue={profile?.name} className="w-full bg-[#1E293B] border border-[#334155] rounded-md px-3 py-2 text-white focus:border-cyan-500 focus:outline-none" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1">Email Address</label>
-                  <input type="email" defaultValue="user@example.com" disabled className="w-full bg-[#1E293B]/50 border border-[#334155] rounded-md px-3 py-2 text-slate-400 cursor-not-allowed" />
+                  <input type="email" defaultValue={profile?.email} disabled className="w-full bg-[#1E293B]/50 border border-[#334155] rounded-md px-3 py-2 text-slate-400 cursor-not-allowed" />
                   <p className="text-xs text-slate-500 mt-1">Email addresses cannot be changed.</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1">Role / Designation</label>
-                  <select className="w-full bg-[#1E293B] border border-[#334155] rounded-md px-3 py-2 text-white focus:border-cyan-500 focus:outline-none">
+                  <select 
+                    disabled={!isAdmin} 
+                    defaultValue={profile?.role || 'Viewer'}
+                    className="w-full bg-[#1E293B] border border-[#334155] rounded-md px-3 py-2 text-white focus:border-cyan-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
                     <option>Administrator</option>
                     <option>Analyst</option>
                     <option>Viewer</option>
                   </select>
+                  {!isAdmin && <p className="text-xs text-amber-500 mt-1">Only Administrators can change roles.</p>}
                 </div>
               </div>
 
@@ -79,31 +112,12 @@ export default function SettingsPage() {
                     <p className="text-sm text-slate-400 mt-1">
                       Because this is a locally run instance of CortexVault, all of your user accounts, document metadata, and generated vector embeddings are stored locally on your machine.
                     </p>
-                    <div className="mt-3 p-2 bg-[#0B1120] rounded border border-[#334155] font-mono text-xs text-cyan-300">
+                    <div className="mt-3 p-2 bg-[#0B1120] rounded border border-[#334155] font-mono text-xs text-cyan-300 break-all">
                       R:\RAG\cortexvault\data\db.json
                     </div>
                   </div>
                 </div>
               </div>
-
-              <div className="bg-[#1E293B] border border-[#334155] rounded-lg p-4 space-y-3">
-                <div className="flex items-start gap-3">
-                  <Shield className="h-5 w-5 text-green-400 shrink-0 mt-0.5" />
-                  <div>
-                    <h3 className="text-sm font-medium text-white">Data Privacy & LLM</h3>
-                    <p className="text-sm text-slate-400 mt-1">
-                      During Intelligence Chat and Document Processing, text chunks are sent securely over HTTPS to the Google Gemini API (gemini-2.5-flash and text-embedding-004) to generate responses and vectors. Your files are not retained for training by Google.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* OTHER TABS (Placeholders) */}
-          {(activeTab === 'security' || activeTab === 'notifications') && (
-            <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-              <p>This section is under construction.</p>
             </div>
           )}
 
